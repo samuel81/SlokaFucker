@@ -1,87 +1,53 @@
 package me.samuel81.indexer;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.pdfbox.multipdf.Splitter;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
-import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.text.PDFTextStripper;
 
-import me.samuel81.indexer.gui.MyFrame;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Rectangle;
+import com.itextpdf.text.pdf.PdfContentByte;
+import com.itextpdf.text.pdf.PdfImportedPage;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.pdf.parser.PdfReaderContentParser;
+import com.itextpdf.text.pdf.parser.SimpleTextExtractionStrategy;
+import com.itextpdf.text.pdf.parser.TextExtractionStrategy;
 
 public class PDFHandler {
 
-	public static void fixPDF(File f) {
-		try (InputStream resource = new FileInputStream(f)) {
-			PDDocument pd = PDDocument.load(resource);
-			PDFRenderer renderer = new PDFRenderer(pd);
-			PDPage last = null;
-			int lastPage = -1;
-			pd.addPage(new PDPage());
+	/**
+	 * Processing PDF files
+	 * 
+	 * @param f          PDF files that need to be processed
+	 * @param autoRotate check if automatically rotate page
+	 * @param autoRBP    check if automatically remove blank page
+	 * @param split      check if automatically split page
+	 * @param convert    check if automatically convert PDF to TIFF
+	 */
+	public static void prosesPDF(File f, boolean autoRotate, boolean autoRBP, boolean split, boolean convert) {
 
-			int previousPages = pd.getPages().getCount();
-			boolean odd = true;
-			for (int i = 0; i < previousPages; i++) {
-				PDPage now = pd.getPage(i);
-				if (now.getArtBox().getWidth() > 400f)
-					continue;
-				if (i == 0 || i % 2 == 0) {
-					last = now;
-					lastPage = i;
-				} else {
-					if (last == null)
-						continue;
-					if (last.getArtBox().getWidth() == now.getArtBox().getWidth()
-							&& last.getArtBox().getHeight() == now.getArtBox().getHeight()) {
-						BufferedImage lastI = renderer.renderImage(i);
-						BufferedImage nowI = renderer.renderImage(lastPage);
-
-						BufferedImage joined = null;
-						if (odd) {
-							joined = joinBufferedImage(lastI, nowI);
-						} else {
-							joined = joinBufferedImage(nowI, lastI);
-						}
-
-						PDPage newPage = new PDPage();
-						pd.addPage(newPage);
-						PDImageXObject pdImageXObject = LosslessFactory.createFromImage(pd, joined);
-						@SuppressWarnings("deprecation")
-						PDPageContentStream contentStream = new PDPageContentStream(pd, newPage, true, false);
-						contentStream.drawImage(pdImageXObject, 0, 0);
-						contentStream.close();
-					}
-					last = null;
-					odd = !odd;
-				}
-			}
-			pd.save(f);
-			pd.close();
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-
-	public static void rotatePDF(File f, boolean autoRotate, boolean autoRBP, boolean toTiff) {
 		try (InputStream resource = new FileInputStream(f)) {
 			PDDocument document = PDDocument.load(resource);
 			Iterator<PDPage> iter = document.getPages().iterator();
+
+			/**
+			 * Count page and warkah and use it later to automatically split the pdf
+			 */
 			int pages = 0;
+			int warkah = 0;
+
 			while (iter.hasNext()) {
 				PDPage page = iter.next();
 				float w = page.getArtBox().getWidth();
@@ -89,16 +55,20 @@ public class PDFHandler {
 
 				boolean landscape = w > h;
 				if (autoRotate) {
-					if (MyFrame.rotateIfLandscape.isSelected() && landscape) {
-						page.setRotation((int) MyFrame.rotateLandscapeAmount.getSelectedItem());
+					if (Main.getMyFrame().getRotateIfLandscape().isSelected() && landscape) {
+						page.setRotation((int) Main.getMyFrame().getRotateLandscapeAmount().getSelectedItem());
 					} else {
-						page.setRotation((int) MyFrame.rotateAmount.getSelectedItem());
+						page.setRotation((int) Main.getMyFrame().getRotateAmount().getSelectedItem());
 					}
 				}
 
 				/*
 				 * System.out.println("========="); System.out.println(w);
 				 * System.out.println(h); System.out.println("=========");
+				 */
+
+				/**
+				 * Remove page which has lower page size then the other
 				 */
 				if (autoRBP) {
 					if ((w < 700f && h < 600f)) {
@@ -110,53 +80,166 @@ public class PDFHandler {
 				pages++;
 
 				if (pages % 4 == 0) {
+					warkah++;
 				}
 
 			}
+			
+			parsePdf(f);
 
-			document.save(f);
-			document.close();
+			if (split) {
+				if (warkah == 2) {
+					if (pages == 8) {
 
-			if (toTiff) {
-				Process process = Runtime.getRuntime().exec(String.format(
-						"gs9.50/bin/gswin64c -dBATCH -dNOPAUSE -r150 -sDEVICE=tiff24nc -sOutputFile=\"%s\" \"%s\"",
-						f.getAbsolutePath().replace("pdf", "tiff"), f.getAbsolutePath()).replace("/", "\\"));
-				process.waitFor();
-				File folder = new File(f.getParent() + "/READY TO INDEX");
-				if (!folder.exists())
-					folder.mkdirs();
-				FileUtils.moveFile(new File(f.getAbsolutePath().replace("pdf", "tiff")),
-						new File(folder, f.getName().replace("pdf", "tiff")));
+						PDFTextStripper pdfStripper = new PDFTextStripper();
+						pdfStripper.setStartPage(1);
+						pdfStripper.setEndPage(1);
+						String page1 = pdfStripper.getText(document).toUpperCase();
+
+						pdfStripper.setStartPage(5);
+						pdfStripper.setEndPage(5);
+						String page2 = pdfStripper.getText(document).toUpperCase();
+
+						if (page1.contains("BUKU") || page1.contains("TANAH") || page1.contains("HAK")
+								|| page1.contains("205")) {
+
+							if (page2.contains("SURAT") || page2.contains("UKUR") || page2.contains("SEBIDANG")
+									|| page2.contains("207") || page2.contains("GAMBAR")) {
+
+								Splitter splitter = new Splitter();
+								splitter.setSplitAtPage(4);
+								List<PDDocument> splittedDocuments = splitter.split(document);
+								int i = 0;
+								for (PDDocument doc : splittedDocuments) {
+									File newF = new File(f.getAbsolutePath().replace(".pdf", "-" + i + ".pdf"));
+									doc.save(newF);
+									doc.close();
+									i++;
+
+									if (convert)
+										convertToTiff(newF);
+								}
+							}
+						}
+					}
+				}
+				document.save(f);
+				document.close();
+				FileUtils.moveFile(f, new File(f.getParent() + "/BEKASAN", f.getName()));
+			} else {
+
+				document.save(f);
+				document.close();
+
+				if (convert)
+					convertToTiff(f);
 			}
+			resource.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 
-	public static BufferedImage joinBufferedImage(BufferedImage img1, BufferedImage img2) {
+	/**
+	 * Converting PDF to TIFF with GhostScript
+	 * 
+	 * @param f PDF File to convert
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
+	private static void convertToTiff(File f) throws IOException, InterruptedException {
+		Process process = Runtime.getRuntime()
+				.exec(String.format(
+						Main.config.getGsFolder()
+								+ "gswin64c -dBATCH -dNOPAUSE -r150 -sDEVICE=tiff24nc -sOutputFile=\"%s\" \"%s\"",
+						f.getAbsolutePath().replace("pdf", "tif"), f.getAbsolutePath()).replace("/", "\\"));
+		process.waitFor();
 
-		// do some calculate first
-		int wid = img1.getWidth() + img2.getWidth();
-		int height = Math.max(img1.getHeight(), img2.getHeight());
-		// create a new buffer and draw two image into the new image
-		BufferedImage newImage = new BufferedImage(wid, height, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g2 = newImage.createGraphics();
-		Color oldColor = g2.getColor();
-		// fill background
-		g2.setPaint(Color.WHITE);
-		g2.fillRect(0, 0, wid, height);
-		// draw image
-		g2.setColor(oldColor);
-		g2.drawImage(img1, null, 0, 0);
-		g2.drawImage(img2, null, img1.getWidth(), 0);
-		g2.dispose();
-		return newImage;
+		File folder = new File(f.getParent() + "/READY TO INDEX");
+		if (!folder.exists())
+			folder.mkdirs();
+		FileUtils.moveFile(new File(f.getAbsolutePath().replace("pdf", "tif")),
+				new File(folder, f.getName().replace("pdf", "tif")));
 	}
+
+	/**
+	 * Fixing broken PDF page By merging 1-2, 3-4, 5-6, and etc page into 1 page
+	 * 
+	 * @param pdf that want to be fixed
+	 */
+	public static void mergeBrokenPDF(File pdf) {
+		File pdfFile = new File(pdf.getAbsolutePath().replace(".pdf", "-fixed.pdf"));
+		try {
+			Document TifftoPDF = new Document();
+			PdfWriter pdfWriter = PdfWriter.getInstance(TifftoPDF, new FileOutputStream(pdfFile));
+
+			pdfWriter.setStrictImageSequence(true);
+			pdfWriter.setPdfVersion(PdfWriter.VERSION_1_4);
+
+			pdfWriter.open();
+			TifftoPDF.open();
+
+			PdfContentByte cb = pdfWriter.getDirectContent();
+
+			PdfReader reader = new PdfReader(new FileInputStream(pdf));
+
+			boolean odd = true;
+
+			PdfImportedPage last = null;
+
+			for (int i = 0; i < reader.getNumberOfPages(); i++) {
+				PdfImportedPage now = pdfWriter.getImportedPage(reader, i + 1);
+				if (now.getWidth() > 400f)
+					continue;
+				if (i == 0 || i % 2 == 0) {
+					last = now;
+				} else {
+					if (last == null)
+						continue;
+					if (last.getWidth() == now.getWidth() && last.getHeight() == now.getHeight()) {
+						TifftoPDF.newPage();
+						Rectangle pageSize = new Rectangle(now.getWidth() * 2, now.getHeight());
+						TifftoPDF.setPageSize(pageSize);
+
+						if (odd) {
+							cb.addTemplate(now, 0, 0);
+							cb.addTemplate(last, now.getWidth(), 0);
+						} else {
+							cb.addTemplate(last, 0, 0);
+							cb.addTemplate(now, now.getWidth(), 0);
+						}
+					}
+					last = null;
+					odd = !odd;
+				}
+			}
+			TifftoPDF.close();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+	
+    /**
+     * Parses a PDF to a plain text file.
+     * 
+     * @param pdf the original PDF
+     * @param txt the resulting text
+     * @throws IOException
+     */
+    public static void parsePdf(File pdf) throws IOException {
+        PdfReader reader = new PdfReader(new FileInputStream(pdf));
+        PdfReaderContentParser parser = new PdfReaderContentParser(reader);
+
+        TextExtractionStrategy strategy;
+        for (int i = 1; i <= reader.getNumberOfPages(); i++) {
+            strategy = parser.processContent(i, new SimpleTextExtractionStrategy());
+            System.out.println("Page "+i+": \n"+strategy.getResultantText());
+        }
+        reader.close();
+    }
 
 }
