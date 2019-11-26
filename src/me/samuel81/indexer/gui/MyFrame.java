@@ -6,8 +6,6 @@ import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -91,7 +89,7 @@ public class MyFrame extends JFrame {
 
 	public MyFrame() {
 
-		setTitle("YANG MAKE HARUS TAU DIRI");
+		setTitle("Hi-Quality Control");
 		setSize(400, 380);
 		setLocation(new Point(300, 200));
 		setLayout(null);
@@ -184,15 +182,6 @@ public class MyFrame extends JFrame {
 		this.addWindowListener(new WindowAdapter() {
 			public void windowClosing(WindowEvent e) {
 				System.exit(1);
-			}
-		});
-
-		this.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyPressed(KeyEvent e) {
-				if ((e.getKeyCode() == KeyEvent.VK_S) && ((e.getModifiers() & KeyEvent.CTRL_MASK) != 0)) {
-					startProcessing();
-				}
 			}
 		});
 
