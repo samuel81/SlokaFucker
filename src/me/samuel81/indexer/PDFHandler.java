@@ -86,7 +86,7 @@ public class PDFHandler {
 			}
 			
 			//parsePdf(f);
-
+			boolean splitted = false;
 			if (split) {
 				if (warkah == 2) {
 					if (pages == 8) {
@@ -119,14 +119,17 @@ public class PDFHandler {
 									if (convert)
 										convertToTiff(newF);
 								}
+								document.save(f);
+								document.close();
+								//FileUtils.moveFile(f, new File(f.getParent() + "/BEKASAN", f.getName()));
+								splitted = true;
 							}
 						}
 					}
 				}
-				document.save(f);
-				document.close();
-				//FileUtils.moveFile(f, new File(f.getParent() + "/BEKASAN", f.getName()));
-			} else {
+			}
+			
+			if(!splitted) {
 
 				document.save(f);
 				document.close();
@@ -134,6 +137,7 @@ public class PDFHandler {
 				if (convert)
 					convertToTiff(f);
 			}
+			
 			resource.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
