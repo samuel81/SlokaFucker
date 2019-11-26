@@ -85,7 +85,7 @@ public class PDFHandler {
 
 			}
 			
-			parsePdf(f);
+			//parsePdf(f);
 
 			if (split) {
 				if (warkah == 2) {
@@ -125,7 +125,7 @@ public class PDFHandler {
 				}
 				document.save(f);
 				document.close();
-				FileUtils.moveFile(f, new File(f.getParent() + "/BEKASAN", f.getName()));
+				//FileUtils.moveFile(f, new File(f.getParent() + "/BEKASAN", f.getName()));
 			} else {
 
 				document.save(f);
