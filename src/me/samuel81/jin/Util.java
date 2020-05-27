@@ -1,4 +1,4 @@
-package me.samuel81.indexer;
+package me.samuel81.jin;
 
 import java.awt.Graphics2D;
 import java.awt.geom.AffineTransform;

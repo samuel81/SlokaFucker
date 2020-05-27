@@ -1,8 +1,8 @@
-package me.samuel81.indexer;
+package me.samuel81.jin;
 
 import javax.swing.JFrame;
 
-import me.samuel81.indexer.gui.MyFrame;
+import me.samuel81.jin.gui.MyFrame;
 
 public class Main {
 

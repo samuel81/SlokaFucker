@@ -1,4 +1,4 @@
-package me.samuel81.indexer;
+package me.samuel81.jin;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

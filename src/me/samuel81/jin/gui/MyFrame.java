@@ -1,7 +1,8 @@
-package me.samuel81.indexer.gui;
+package me.samuel81.jin.gui;
 
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Font;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
@@ -32,8 +33,9 @@ import javax.swing.event.ChangeListener;
 import com.itextpdf.text.DocumentException;
 
 import lombok.Getter;
-import me.samuel81.indexer.PDFHandler;
-import me.samuel81.indexer.Uploader;
+import me.samuel81.jin.Checker;
+import me.samuel81.jin.PDFHandler;
+import me.samuel81.jin.Uploader;
 
 @Getter
 public class MyFrame extends JFrame {
@@ -49,7 +51,7 @@ public class MyFrame extends JFrame {
 	 */
 	private JButton imgSource = new JButton("Browse");
 	private JTextField txtD = new JTextField();
-	private JLabel lblG = new JLabel("Image Source");
+	private JLabel lblG = new JLabel("File Source");
 
 	/**
 	 * Apps mode chooser
@@ -59,12 +61,12 @@ public class MyFrame extends JFrame {
 	private Set<File> imgFiles = new HashSet<>();
 
 	private int MODE = 0;
-	private int CONVERT = 0, UPLOAD = 1;
+	private int CONVERT = 0, UPLOAD = 1, CHECKER = 2;
 
 	public MyFrame() {
 
 		setTitle("Image2PDF Batch Converter (S4-Development");
-		setSize(400, 200);
+		setSize(800, 400);
 		setLocation(new Point(300, 200));
 		setLayout(null);
 		setResizable(false);
@@ -81,22 +83,25 @@ public class MyFrame extends JFrame {
 		chooser.setCurrentDirectory(new java.io.File("."));
 
 		toggleMode.setBorder(new TitledBorder(UIManager.getBorder("TitledBorder.border"),
-				"CONVERT          |          UPLOAD", TitledBorder.CENTER, TitledBorder.TOP, null, new Color(0, 0, 0)));
+				"CONVERT          |          UPLOAD          |          CHECK", TitledBorder.CENTER, TitledBorder.TOP,
+				null, new Color(0, 0, 0)));
 
 		toggleMode.setSnapToTicks(false);
 		toggleMode.setPaintTicks(true);
 		toggleMode.setPaintLabels(false);
 		toggleMode.setPaintTrack(false);
-		toggleMode.setMaximum(1);
+		toggleMode.setMaximum(2);
 		toggleMode.setValue(0);
 
-		toggleMode.setBounds(70, 40, 250, 50);
-		startB.setBounds(150, 105, 100, 40);
-		imgSource.setBounds(340, 10, 20, 20);
+		toggleMode.setBounds(140, 80, 500, 50);
+		startB.setBounds(300, 210, 200, 80);
+		imgSource.setBounds(680, 20, 40, 40);
 
-		txtD.setBounds(130, 10, 200, 20);
+		txtD.setBounds(260, 20, 400, 40);
 		txtD.setEditable(false);
-		lblG.setBounds(30, 10, 100, 20);
+		txtD.setFont(new Font("Dialog", Font.PLAIN, 20));
+		lblG.setFont(new Font("Dialog", Font.PLAIN, 24));
+		lblG.setBounds(60, 20, 200, 40);
 
 		add(startB);
 		add(imgSource);
@@ -142,7 +147,7 @@ public class MyFrame extends JFrame {
 				if (MODE == CONVERT) {
 
 					lblG.setText("Image Source");
-				} else if (MODE == UPLOAD) {
+				} else if (MODE == UPLOAD || MODE == CHECKER) {
 
 					lblG.setText("PDF Source");
 				}
@@ -158,13 +163,15 @@ public class MyFrame extends JFrame {
 	 */
 	private void startProcessing() {
 		if (imgFiles == null || imgFiles.size() < 1) {
-			JOptionPane.showMessageDialog(null, "Please select images source first!", "ERROR",
+			JOptionPane.showMessageDialog(null, "Please select source first!", "ERROR",
 					JOptionPane.ERROR_MESSAGE);
 			return;
 		}
 		setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+		
 		long start = System.currentTimeMillis();
 		int success = 0, failed = 0;
+		
 		if (MODE == CONVERT) {
 			for (File file : imgFiles) {
 				try {
@@ -173,27 +180,45 @@ public class MyFrame extends JFrame {
 					e.printStackTrace();
 				}
 			}
-		} else {
+		} else if (MODE == UPLOAD) {
 			Uploader uploader = new Uploader(imgFiles);
 			uploader.setup();
-			uploader.startUpload();
+			try {
+				uploader.startUpload();
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 			uploader.saveLog();
 			success = uploader.totalSuccess();
 			failed = uploader.totalFailed();
+		} else if (MODE == CHECKER) {
+			Checker checker = new Checker(imgFiles);
+			checker.setup();
+			try {
+				checker.startUpload();
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			checker.saveLog();
+			failed = checker.totalFailed();
+			success = imgFiles.size() - failed;
 		}
+		
 		long totalTime = System.currentTimeMillis() - start;
 		setCursor(null);
 		Toolkit.getDefaultToolkit().beep();
-		if(MODE == CONVERT) {
-		JOptionPane.showMessageDialog(null,
-				"Total processed : " + PDFHandler.totalProcessed() + "\n Time elapsed: "
-						+ TimeUnit.MILLISECONDS.toSeconds(totalTime),
-				"Please do some final QC!", JOptionPane.INFORMATION_MESSAGE);
+		if (MODE == CONVERT) {
+			JOptionPane.showMessageDialog(null,
+					"Total processed : " + PDFHandler.totalProcessed() + "\n Time elapsed: "
+							+ TimeUnit.MILLISECONDS.toSeconds(totalTime),
+					"Please do some final QC!", JOptionPane.INFORMATION_MESSAGE);
 		} else {
 			JOptionPane.showMessageDialog(null,
 					"Total success : " + success + "\n Total failed : " + failed + "\n Time elapsed: "
 							+ TimeUnit.MILLISECONDS.toSeconds(totalTime),
-					"Done uploading file!", JOptionPane.INFORMATION_MESSAGE);
+					"Done " + (MODE == CONVERT ? "uploading" : "checking") + " file!", JOptionPane.INFORMATION_MESSAGE);
 		}
 	}
 
@@ -234,9 +259,8 @@ public class MyFrame extends JFrame {
 							.filter(x -> (x.getFileName().toString().toLowerCase().endsWith(".pdf")))
 							.filter(x -> ((x.toFile().getName().contains("SU")))
 									|| ((x.toFile().getName().contains("GS"))))
-							.forEach(x ->  {
+							.forEach(x -> {
 								folder.add(x.toFile());
-								//System.out.println(x.toFile().getAbsolutePath());
 							});
 				}
 			}

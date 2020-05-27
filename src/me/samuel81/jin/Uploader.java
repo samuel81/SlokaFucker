@@ -1,4 +1,4 @@
-package me.samuel81.indexer;
+package me.samuel81.jin;
 
 import java.io.File;
 import java.io.IOException;
@@ -83,55 +83,64 @@ public class Uploader {
 		}
 	}
 
-	public void startUpload() {
-		files.stream().forEach(f -> {
-			try {
-				uploadSU(f);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+	public void startUpload() throws InterruptedException {
+		for(File f:files) {
+			int status = uploadSU(f);
+			if(status == 0) {
+				restCounter++;
+				if (restCounter % 100 == 0) {
+					Thread.sleep(200);
+				} else if (restCounter % 10 == 0) {
+					Thread.sleep(50);
+				}
+			} else if(status == 1) {
+				//Isn't on DB
+			} else if(status == 2) {
+				//Error
+				break;
 			}
-		});
+		}
 	}
 
 	@SuppressWarnings("deprecation")
-	private void uploadSU(File file) throws InterruptedException {
+	private int uploadSU(File file) {
 		String fName = file.getName();
 		String[] fSplitted = fName.split("_");
-		// Searching
-		WebElement nomor = session.findElementByAccessibilityId("txtNomor");
-		nomor.click();
-		nomor.findElement(By.className("TextBox")).sendKeys(Keys.CONTROL + "a");
-		nomor.findElement(By.className("TextBox")).sendKeys(Keys.BACK_SPACE);
-		nomor.findElement(By.className("TextBox")).sendKeys(fSplitted[2].replaceFirst("^0+(?!$)", ""));
-
-		if (!latestThn.equalsIgnoreCase(fSplitted[3])) {
-			WebElement thn = session.findElementByAccessibilityId("Tahun Surat Ukur");
-			thn.click();
-			thn.findElement(By.className("TextBox")).sendKeys(Keys.CONTROL + "a");
-			thn.findElement(By.className("TextBox")).sendKeys(Keys.BACK_SPACE);
-			thn.findElement(By.className("TextBox")).sendKeys(fSplitted[3]);
-			latestThn = fSplitted[3];
-		}
-
-		session.findElementByAccessibilityId("Cari").click();
-
-		WebElement data = session.findElementByAccessibilityId("dataPresenter");
-
-		boolean found = false;
-		session.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
 		try {
-			WebElement d = data.findElement(By.name("Warkah.SuratUkurItem"));
-			d.click();
-			found = true;
-		} catch (NoSuchElementException e) {
+			// Searching
+			WebElement nomor = session.findElementByAccessibilityId("txtNomor");
+			nomor.click();
+			nomor.findElement(By.className("TextBox")).sendKeys(Keys.CONTROL + "a");
+			nomor.findElement(By.className("TextBox")).sendKeys(Keys.BACK_SPACE);
+			nomor.findElement(By.className("TextBox")).sendKeys(fSplitted[2].replaceFirst("^0+(?!$)", ""));
 
-		}
-		session.manage().timeouts().implicitlyWait(60 * 3, TimeUnit.SECONDS);
-		if (found) {
+			if (!latestThn.equalsIgnoreCase(fSplitted[3])) {
+				WebElement thn = session.findElementByAccessibilityId("Tahun Surat Ukur");
+				thn.click();
+				thn.findElement(By.className("TextBox")).sendKeys(Keys.CONTROL + "a");
+				thn.findElement(By.className("TextBox")).sendKeys(Keys.BACK_SPACE);
+				thn.findElement(By.className("TextBox")).sendKeys(fSplitted[3]);
+				latestThn = fSplitted[3];
+			}
+
+			session.findElementByAccessibilityId("Cari").click();
+
+			WebElement data = session.findElementByAccessibilityId("dataPresenter");
+
+			session.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+			try {
+				WebElement d = data.findElement(By.name("Warkah.SuratUkurItem"));
+				d.click();
+			} catch (NoSuchElementException e) {
+				System.out.println("SU cannot be found on DB " + fName);
+				fail.append(fName + "\n");
+				failed++;
+				return 1;
+			}
+			session.manage().timeouts().implicitlyWait(60 * 3, TimeUnit.SECONDS);
 			// Uploading
 			session.findElementByAccessibilityId("BarSplitButtonItemLinkbOpenFromWeb").click();
-
+			
 			if (firstTime) {
 				session.getKeyboard().sendKeys(Keys.F4);
 				session.getKeyboard().sendKeys(Keys.CONTROL + "a" + Keys.CONTROL);
@@ -154,17 +163,13 @@ public class Uploader {
 					.click();
 			System.out.println("Successfully uploading " + fName);
 			uploaded.append(fName + "\n");
-			restCounter++;
 			success++;
-			if (restCounter % 100 == 0) {
-				Thread.sleep(100);
-			} else if (restCounter % 10 == 0) {
-				Thread.sleep(50);
-			}
-		} else {
+			return 0;
+		} catch (Exception e) {
 			System.out.println("Failed to upload " + fName);
 			fail.append(fName + "\n");
 			failed++;
+			return 2;
 		}
 	}
 
