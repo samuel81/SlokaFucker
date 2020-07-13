@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 
+import com.google.common.io.Files;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Image;
@@ -17,8 +18,6 @@ import com.itextpdf.text.pdf.parser.SimpleTextExtractionStrategy;
 import com.itextpdf.text.pdf.parser.TextExtractionStrategy;
 
 public class PDFHandler {
-	
-	private static int totalProcessed = 0;
 
 	public static void processImage(File folder) throws DocumentException, MalformedURLException, IOException {
 		ByteArrayOutputStream target = null;
@@ -39,13 +38,13 @@ public class PDFHandler {
 		String name = folder.getName();
 		String type, nib, no, thn;
 		String[] t1 = name.split("-");
-		if(t1.length < 3) {
+		if (t1.length < 3) {
 			System.out.println(name);
 			return;
 		}
 		nib = t1[0];
 		String[] t2 = t1[2].split("_");
-		if(t2.length < 3) {
+		if (t2.length < 3) {
 			System.out.println(name);
 			return;
 		}
@@ -53,20 +52,24 @@ public class PDFHandler {
 		no = t2[1];
 		thn = t2[2];
 		File movedFolder = new File(folder.getParent() + "/" + nib);
-		if(!movedFolder.exists())
+		if (!movedFolder.exists())
 			movedFolder.mkdirs();
 		Util.manipulatePdf(target.toByteArray(),
-				new File(movedFolder, type + "_" + nib + "_" + no + "_" + thn + ".pdf")
-						.toPath().toString());
-		totalProcessed++;
-		if(totalProcessed % 100 == 0) {
-			System.out.println("Processed : "+totalProcessed);
-		}
+				new File(movedFolder, type + "_" + nib + "_" + no + "_" + thn + ".pdf").toPath().toString(), 0.5f);
 		// Files.deleteIfExists(target.toPath());
 	}
-	
-	public static int totalProcessed() {
-		return totalProcessed;
+
+	public static void compress(File file) {
+		File targetFolder = new File(file.getParentFile() + File.separator + "Converted");
+		if (!targetFolder.exists())
+			targetFolder.mkdir();
+		try {
+			Util.manipulatePdf(Files.toByteArray(file), new File(targetFolder, file.getName()).toPath().toString(),
+					.8f);
+		} catch (IOException | DocumentException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	/**
